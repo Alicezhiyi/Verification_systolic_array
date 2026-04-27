@@ -2,75 +2,76 @@ module async_fifo_tb;
 parameter int BUS_WIDTH = 8;
 parameter int COUNTER_WIDTH = 4;
 
-logic clk_write;
-logic rst_write_n;
+logic wclk;
+logic wrst_n;
 logic write_en;
-logic [BUS_WIDTH-1:0] data_in;
+logic [BUS_WIDTH-1:0] wdata;
 logic full;
 
-logic clk_read;
-logic rst_read_n;
+logic rclk;
+logic rrst_n;
 logic read_en;
-logic [BUS_WIDTH-1:0] data_out;
+logic [BUS_WIDTH-1:0] rdata;
 logic empty;
 
 async_fifo #(
-    .BUS_WIDTH(BUS_WIDTH),
-    .COUNTER_WIDTH(COUNTER_WIDTH)
+    .DSIZE(BUS_WIDTH),
+    .ASIZE(COUNTER_WIDTH),
+    .FALLTHROUGH("FALSE")
 ) dut (
-    .clk_write(clk_write),
-    .rst_write_n(rst_write_n),
-    .write_en(write_en),
-    .data_in(data_in),
-    .full(full),
+    .wclk(wclk),
+    .wrst_n(wrst_n),
+    .winc(write_en),
+    .wdata(wdata),
+    .wfull(full),
 
-    .clk_read(clk_read),
-    .rst_read_n(rst_read_n),
-    .read_en(read_en),
-    .data_out(data_out),
-    .empty(empty)
+    .rclk(rclk),
+    .rrst_n(rrst_n),
+    .rinc(read_en),
+    .rdata(rdata),
+    .rempty(empty)
 );
 
 //=======version 1=======
 // // Generate write clock
-// initial clk_write = 0;
-// always #5 clk_write = ~clk_write;
+// initial wclk = 0;
+// always #5 wclk = ~wclk;
 
-// initial clk_read = 0;
-// always #7 clk_read = ~clk_read;
+// initial rclk = 0;
+// always #7 rclk = ~rclk;
 
 // initial begin
 //     // Initialize signals
-//     clk_write = 0;
-//     rst_write_n = 0;
+//     wclk = 0;
+//     wrst_n = 0;
 //     write_en = 0;
-//     data_in = 0;
+//     wdata = 0;
 
-//     clk_read = 0;
-//     rst_read_n = 0;
+//     rclk = 0;
+//     rrst_n = 0;
 //     read_en = 0;
 
 //     // Reset the FIFO
 //     #20 
-//     rst_write_n = 1;
-//     rst_read_n = 1;
+//     wrst_n = 1;
+//     rrst_n = 1;
     
 
 //     // Write some data into the FIFO
 //     for (int i = 0; i < 32; i++) begin
-//         @(posedge clk_write);
+//         @(posedge wclk);
 //         write_en <= 1;
-//         data_in <= i;
+//         wdata <= i;
 //     end
 //     write_en <= 0;
 
 //     // Read the data back from the FIFO
 //     for (int i = 0; i < 32; i++) begin
-//         @(posedge clk_read);
+//         @(posedge rclk);
 //         read_en <= 1;
-//         @(posedge clk_read);
+//         @(posedge rclk);
 //         read_en <= 0;
-//         $display("Read data: %d", data_out);
+//         $display("Read data: %d", rdata);
 //     end
 
 //     $finish;
@@ -78,11 +79,11 @@ async_fifo #(
 
 //=======version 2=======
 // Generate write clock
-initial clk_write = 0;
-always #5 clk_write = ~clk_write;
+initial wclk = 0;
+always #5 wclk = ~wclk;
 
-initial clk_read = 0;
-always #7 clk_read = ~clk_read;
+initial rclk = 0;
+always #7 rclk = ~rclk;
 
 logic [BUS_WIDTH-1:0] q;
 
@@ -90,10 +91,10 @@ localparam int DEPTH = 1 << COUNTER_WIDTH;
 
 task automatic write_data(input logic [BUS_WIDTH-1:0] d);
     begin
-        @(negedge clk_write);
-        data_in = d;
+        @(negedge wclk);
+        wdata = d;
         write_en = 1;
-        @(posedge clk_write);
+        @(posedge wclk);
         #1;
         write_en = 0;
     end
@@ -101,28 +102,28 @@ endtask
 
 task automatic read_data(output logic [BUS_WIDTH-1:0] d);
     begin
-        @(negedge clk_read);
+        @(negedge rclk);
         read_en = 1;
-        @(posedge clk_read);
+        @(posedge rclk);
         #1;
         read_en = 0;
-        d = data_out;
+        d = rdata;
     end
 endtask
 
 initial begin
-    rst_write_n = 0;
-    rst_read_n = 0;
+    wrst_n = 0;
+    rrst_n = 0;
     write_en = 0;
     read_en = 0;
-    data_in = 0;
+    wdata = 0;
 
-    repeat (2) @(posedge clk_write);
-    repeat (2) @(posedge clk_read);
-    rst_write_n = 1;
-    rst_read_n = 1;
+    repeat (2) @(posedge wclk);
+    repeat (2) @(posedge rclk);
+    wrst_n = 1;
+    rrst_n = 1;
 
-    repeat (3) @(posedge clk_read);
+    repeat (3) @(posedge rclk);
 
     // 1) after reset empty=1, full=0
     assert (empty === 1'b1) else $fatal("RESET: empty should be 1");
@@ -130,7 +131,7 @@ initial begin
 
     // 2) write until full
     for (int i = 0; i < DEPTH; i++) write_data(i[BUS_WIDTH-1:0]);
-    repeat (3) @(posedge clk_write);
+    repeat (3) @(posedge wclk);
     assert (full  === 1'b1) else $fatal("After writing DEPTH elements, full should be 1");
 
     // 3) write after full
@@ -138,7 +139,7 @@ initial begin
 
     // 4) read one, full should be set back to 0
     read_data(q);
-    repeat (3) @(posedge clk_write);
+    repeat (4) @(posedge wclk);
     assert (full === 1'b0) else $fatal("FULL: should deassert after one read and sync");
 
     // 5) read until empty
@@ -147,7 +148,7 @@ initial begin
         assert (q == i[BUS_WIDTH-1:0])
           else $fatal("DATA MISMATCH: exp=%0d got=%0d", i, q);
     end
-    repeat (3) @(posedge clk_read);
+    repeat (3) @(posedge rclk);
     assert (empty === 1'b1) else $fatal("EMPTY: not asserted after draining");
 
     // 6) read after empty
